@@ -1,0 +1,25 @@
+name: Construir APK
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Armar proyecto
+        run: |
+          mkdir -p app/src/main/java/app/uab/bridge app/src/main/assets
+          cp MainActivity.java app/src/main/java/app/uab/bridge/
+          cp AndroidManifest.xml app/src/main/
+          cp home.html shim.js uab-puente.js app/src/main/assets/
+          cp app-build.gradle app/build.gradle
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: '8.9' }
+      - run: gradle assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: uab-puente-apk
+          path: app/build/outputs/apk/debug/*.apk

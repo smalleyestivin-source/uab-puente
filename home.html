@@ -1,0 +1,25 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UAB</title><style>
+body{margin:0;background:#0d0f15;color:#e8ecf5;font:15px system-ui,sans-serif;padding:18px;max-width:640px;margin:auto}
+h1{font-size:22px;margin:6px 0}p{color:#9aa5bd;line-height:1.5}
+input{width:100%;box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid #2b3142;background:#14171f;color:inherit;font:inherit}
+.g{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}
+a{display:block;text-align:center;padding:14px;border-radius:12px;background:#4f6bff;color:#fff;text-decoration:none;font-weight:600}
+small{color:#7c879f;display:block;margin-top:14px;line-height:1.5}b.ok{color:#4ade80}b.no{color:#fbbf24}
+</style></head><body>
+<h1>Universal AI Bridge</h1>
+<p>1. Pega el enlace de tu relay (se guarda en este dispositivo).<br>2. Abre tu IA e inicia sesión.<br>3. Toca el botón <b>UAB</b> de abajo a la izquierda y luego «Insertar instrucciones». Envíalas y pídele cosas.</p>
+<input id="rl" placeholder="https://tu-relay.workers.dev/c/…" autocomplete="off">
+<p id="st"></p>
+<div class="g">
+<a href="https://grok.com/">Grok</a><a href="https://chat.deepseek.com/">DeepSeek</a>
+<a href="https://chatgpt.com/">ChatGPT</a><a href="https://gemini.google.com/">Gemini</a>
+<a href="https://www.perplexity.ai/">Perplexity</a><a href="https://copilot.microsoft.com/">Copilot</a></div>
+<small>Si una IA no te deja iniciar sesión con Google dentro de la app, usa correo y contraseña. Las acciones delicadas se aprueban en el panel de tu relay (/admin).</small>
+<script>
+var rl=document.getElementById('rl'),st=document.getElementById('st');
+function chk(){var v=rl.value.trim();var ok=/^https:\/\/[^\s\/?#]+\/c\/[0-9a-f]{32}/i.test(v);
+ st.innerHTML=!v?'':ok?'<b class="ok">Enlace correcto.</b>':'<b class="no">Debe verse como https://…/c/ y 32 letras o números.</b>';return ok;}
+try{var s=UABNative.get('relay');if(s)rl.value=JSON.parse(s);}catch(e){}
+rl.addEventListener('input',function(){if(chk())UABNative.set('relay',JSON.stringify(rl.value.trim()));});chk();
+</script></body></html>

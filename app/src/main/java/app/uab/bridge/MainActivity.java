@@ -17,6 +17,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
+import android.webkit.RenderProcessGoneDetail;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -72,6 +73,7 @@ public class MainActivity extends Activity {
         String name, start, ai, acct, who, profile, state = "idle";
         volatile String url = "";
         WebView web;
+        CookieManager cm;
         Button btn;
     }
 
@@ -116,6 +118,18 @@ public class MainActivity extends Activity {
         Tab first = byName(prefs.getString("lastTab", ""));
         select(first != null && first.ai != null ? first : tabs.get(0));
     }
+
+    void cm2flush(Tab t) { if (t.cm != null) t.cm.flush(); else CookieManager.getInstance().flush(); }
+
+    /** Guarda en disco las cookies (sesiones) de todas las pestañas y los perfiles. */
+    void flushCookies() {
+        try { CookieManager.getInstance().flush(); } catch (Throwable ignored) { }
+        for (Tab t : tabs) if (t.cm != null) { try { t.cm.flush(); } catch (Throwable ignored) { } }
+    }
+
+    @Override protected void onPause() { flushCookies(); super.onPause(); }
+    @Override protected void onStop() { flushCookies(); super.onStop(); }
+    @Override protected void onDestroy() { flushCookies(); super.onDestroy(); }
 
     /* ---------- lista de pestañas guardada ---------- */
     List<String[]> loadList() {
@@ -345,6 +359,7 @@ public class MainActivity extends Activity {
         if (t.profile != null) cm = useProfile(web, t.profile);
         if (cm == null) cm = CookieManager.getInstance();
         t.web = web;
+        t.cm = cm;
         t.url = start;
         content.addView(web, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
@@ -372,8 +387,17 @@ public class MainActivity extends Activity {
                 return true; // http plano e intents: no se abren dentro de la app
             }
             @Override public void onPageStarted(WebView v, String url, Bitmap f) { t.url = url; }
+            /** Si Android mata el motor web por falta de memoria, solo se reinicia esa pestaña (antes se cerraba la app). */
+            @Override public boolean onRenderProcessGone(WebView v, RenderProcessGoneDetail d) {
+                try { content.removeView(v); v.destroy(); } catch (Throwable ignored) { }
+                t.web = null;
+                Toast.makeText(MainActivity.this, t.name + " se reinició por falta de memoria.", Toast.LENGTH_LONG).show();
+                if (cur == t) select(t);
+                return true;
+            }
             @Override public void onPageFinished(WebView v, String url) {
                 t.url = url;
+                try { cm2flush(t); } catch (Throwable ignored) { }
                 if (t.ai != null && t.who != null && url.startsWith("https://")) {
                     try { if (hosts.contains(Uri.parse(url).getHost())) prefs.edit().putString("url_" + t.who, url).apply(); } catch (Exception ignored) { }
                 }

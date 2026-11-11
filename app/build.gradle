@@ -3,11 +3,11 @@ android {
     namespace 'app.uab.bridge'
     compileSdk 34
     defaultConfig {
-        applicationId 'app.uab.bridge'
+        applicationId 'app.uab.puente2'
         minSdk 24
         targetSdk 34
         versionCode 2
-        versionName '0.2.0'
+        versionName '0.2.1'
     }
     buildTypes { release { minifyEnabled false } }
 }

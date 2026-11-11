@@ -63,6 +63,7 @@ public class MainActivity extends Activity {
             {"Meta AI", "https://www.meta.ai/"}
     };
     static final String[] DEFAULT_AIS = {"Claude", "ChatGPT", "Grok", "DeepSeek", "Gemini"};
+    static boolean okKey(String k) { return k != null && k.matches("(relay|on|auto|autoins|maxh|executed)(@[a-z0-9_-]{1,30})?"); }
     static final Set<String> KEYS = new HashSet<String>(java.util.Arrays.asList("relay", "on", "auto", "executed"));
     static final int FILE_REQ = 7;
 
@@ -455,11 +456,11 @@ public class MainActivity extends Activity {
         Bridge(Tab t) { tab = t; }
 
         @JavascriptInterface public String get(String k) {
-            if (!trusted(tab) || !KEYS.contains(k)) return null;
+            if (!trusted(tab) || !okKey(k)) return null;
             return prefs.getString(k, null);
         }
         @JavascriptInterface public void set(String k, String v) {
-            if (!trusted(tab) || !KEYS.contains(k) || v == null || v.length() > 60000) return;
+            if (!trusted(tab) || !okKey(k) || v == null || v.length() > 60000) return;
             prefs.edit().putString(k, v).apply();
         }
         @JavascriptInterface public void copy(final String t) {

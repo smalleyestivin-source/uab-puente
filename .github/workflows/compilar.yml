@@ -18,5 +18,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk uab-2.apk
-          gh release create "v2-${GITHUB_RUN_NUMBER}" uab-2.apk --title "UAB 2 (compilación ${GITHUB_RUN_NUMBER})" --notes "Se instala aparte de la app vieja (nombre UAB 2)."
+          V=$(grep -o "versionName '[^']*'" app/build.gradle | cut -d"'" -f2)
+          cp app/build/outputs/apk/debug/app-debug.apk "UAB-v${V}.apk"
+          gh release create "v${V}-${GITHUB_RUN_NUMBER}" "UAB-v${V}.apk" --title "UAB versión ${V}" --notes "App UAB 2, versión ${V}. Se instala sobre la anterior."

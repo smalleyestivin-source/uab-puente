@@ -1,0 +1,37 @@
+name: Compilar UAB v2
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Armar proyecto desde el paquete
+        run: |
+          B=$(ls uab-bundle*.txt 2>/dev/null | sort -V | tail -n1)
+          if [ -z "$B" ]; then echo "No encontré ningún archivo uab-bundle*.txt en el repositorio."; exit 1; fi
+          echo "Usando el paquete: $B"
+          python3 - "$B" <<'PY'
+          import sys, os, re
+          t = open(sys.argv[1], encoding='utf-8').read()
+          parts = re.split(r'^=====FILE (.+?)=====\n', t, flags=re.M)
+          n = 0
+          for i in range(1, len(parts), 2):
+              p = parts[i].strip()
+              assert not p.startswith('/') and '..' not in p, p
+              d = os.path.dirname(p)
+              if d: os.makedirs(d, exist_ok=True)
+              open(p, 'w', encoding='utf-8').write(parts[i + 1])
+              n += 1
+          print('Archivos creados:', n)
+          PY
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: '8.9' }
+      - run: gradle assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: uab-puente-apk-v2
+          path: app/build/outputs/apk/debug/*.apk

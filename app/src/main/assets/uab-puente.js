@@ -29,7 +29,7 @@
     if (typeof GM_xmlhttpRequest === 'function') GM_xmlhttpRequest({method: 'GET', url, timeout: 30000, onload: r => res(r.responseText || ''), onerror: () => rej(new Error('red')), ontimeout: () => rej(new Error('tiempo'))});
     else fetch(url).then(r => r.text()).then(res, rej);
   });
-  const cfg = () => ({relay: store.get('relay', ''), on: store.get('on', true), auto: store.get('auto', true)});
+  const cfg = () => ({relay: store.get('relay', ''), on: store.get('on', true), auto: store.get('auto', true), autoins: store.get('autoins', true)});
   const parseRelay = s => { const m = String(s || '').trim().match(/^(https?:\/\/[^\s\/?#]+)\/c\/([0-9a-f]{32})/i); return m ? {base: m[1], token: m[2].toLowerCase()} : null; };
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const report = st => { try { window.UABNative && window.UABNative.status && window.UABNative.status(st); } catch (e) {} };
@@ -159,18 +159,20 @@
    <input type="text" id="rl" placeholder="https://tu-relay.workers.dev/c/…">
    <label><input type="checkbox" id="on"> Activo</label>
    <label><input type="checkbox" id="auto"> Enviar resultados solo</label>
+   <label><input type="checkbox" id="autoins"> Enviar instrucciones solo en chat nuevo</label>
    <button class="b" id="ins">Insertar instrucciones</button><button class="b" id="tst">Probar</button>
    <div id="log"></div></div><button id="fab">UAB</button>`;
   const $ = s => sh.querySelector(s);
   function say(t) { const l = $('#log'); l.textContent += (l.textContent ? '\n' : '') + t; l.scrollTop = l.scrollHeight; }
   function initUi() {
     document.body.appendChild(host);
-    const c = cfg(); $('#rl').value = c.relay; $('#on').checked = c.on; $('#auto').checked = c.auto;
+    const c = cfg(); $('#rl').value = c.relay; $('#on').checked = c.on; $('#auto').checked = c.auto; $('#autoins').checked = c.autoins;
     window.__uabInsert = () => $('#ins').click();
     $('#fab').onclick = () => { const b = $('#box'); b.style.display = b.style.display === 'block' ? 'none' : 'block'; };
     $('#rl').oninput = () => store.set('relay', $('#rl').value.trim());
     $('#on').onchange = () => { store.set('on', $('#on').checked); report($('#on').checked ? 'idle' : 'paused'); };
     $('#auto').onchange = () => store.set('auto', $('#auto').checked);
+    $('#autoins').onchange = () => store.set('autoins', $('#autoins').checked);
     $('#tst').onclick = async () => { const rl = parseRelay(cfg().relay); if (!rl) return say('⚠ Enlace con formato incorrecto.'); try { const m = await relayJson(`${rl.base}/c/${rl.token}/meta.tools`); say(m.ok ? '✓ Relay correcto: ' + (m.data || []).length + ' herramientas.' : '⚠ ' + (m.error || 'error')); } catch { say('⚠ No se pudo conectar al relay.'); } };
     $('#ins').onclick = async () => {
       try { const t = await buildInstructions(); const el = composer();
@@ -179,6 +181,25 @@
       } catch (e) { say('⚠ ' + e.message); }
     };
   }
-  const start = () => { initUi(); report(cfg().on ? 'idle' : 'paused'); setTimeout(() => { baselineDone = true; }, 4000); setInterval(scan, 1500); };
+  /* ---------- instrucciones automáticas al abrir un chat nuevo ---------- */
+  const NEWCHAT = /^\/(app|new|chat|new-chat|chats\/new|chat\/new)?\/?$/;
+  let insPath = null, seenPath = null, insTick = 0, insBusy = false;
+  async function autoInstr() {
+    if (insBusy || !baselineDone) return;
+    const c = cfg(), p = location.pathname;
+    if (p !== seenPath) { seenPath = p; insPath = null; insTick = 0; }          // cambió de página: se vuelve a armar
+    if (!c.on || !c.autoins || !parseRelay(c.relay) || !NEWCHAT.test(p) || insPath === p) return;
+    const el = composer(); if (!el || textOf(el).trim()) { insTick = 0; return; }
+    if (++insTick < 3) return;                                   // la caja debe llevar estable unos segundos
+    insBusy = true; insPath = p;
+    try {
+      sentTimes = sentTimes.filter(t => Date.now() - t < 3600e3);
+      if (sentTimes.length >= 25) return;
+      const t = await buildInstructions();
+      if (await deliver(t + '\nConfirma solo con la palabra: Listo.', true)) { sentTimes.push(Date.now()); say('✓ Instrucciones enviadas solas.'); }
+      else say('✋ Instrucciones en la caja: pulsa enviar tú.');
+    } catch (e) { say('⚠ ' + e.message); } finally { insBusy = false; }
+  }
+  const start = () => { initUi(); report(cfg().on ? 'idle' : 'paused'); setTimeout(() => { baselineDone = true; }, 4000); setInterval(scan, 1500); setInterval(autoInstr, 1500); };
   document.body ? start() : addEventListener('DOMContentLoaded', start);
 })();

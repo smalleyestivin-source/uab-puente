@@ -112,7 +112,8 @@ public class MainActivity extends Activity {
         newTab("Proyecto", null, null, null);
         for (String[] t : loadList()) addAiTab(t[0], t[1]);
         rebuildBar();
-        select(tabs.get(0));
+        Tab first = byName(prefs.getString("lastTab", ""));
+        select(first != null && first.ai != null ? first : tabs.get(0));
     }
 
     /* ---------- lista de pestañas guardada ---------- */
@@ -308,6 +309,10 @@ public class MainActivity extends Activity {
                 }
                 start = pre + "/admin";
             }
+            if (t.ai != null && t.who != null) {
+                String saved = prefs.getString("url_" + t.who, null);
+                if (saved != null && saved.startsWith("https://") && hosts.contains(Uri.parse(saved).getHost())) start = saved;
+            }
             makeWeb(t, start);
         }
         show(t);
@@ -315,6 +320,7 @@ public class MainActivity extends Activity {
 
     void show(Tab t) {
         cur = t;
+        if (t.ai != null) prefs.edit().putString("lastTab", t.name).apply();
         for (Tab x : tabs) {
             if (x.web != null) x.web.setVisibility(x == t ? View.VISIBLE : View.GONE);
             x.btn.setBackgroundColor(x == t ? Color.parseColor("#4f6bff") : Color.parseColor("#2b3142"));
@@ -367,6 +373,9 @@ public class MainActivity extends Activity {
             @Override public void onPageStarted(WebView v, String url, Bitmap f) { t.url = url; }
             @Override public void onPageFinished(WebView v, String url) {
                 t.url = url;
+                if (t.ai != null && t.who != null && url.startsWith("https://")) {
+                    try { if (hosts.contains(Uri.parse(url).getHost())) prefs.edit().putString("url_" + t.who, url).apply(); } catch (Exception ignored) { }
+                }
                 if (trusted(t) && !url.startsWith("file:")) {
                     String id = t.who == null ? "" : t.who.replace("'", "");
                     v.evaluateJavascript("window.__uabWho='" + id + "';", null);

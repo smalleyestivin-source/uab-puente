@@ -2,6 +2,8 @@ name: Compilar UAB v2
 on:
   push:
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -35,3 +37,9 @@ jobs:
         with:
           name: uab-puente-apk-v2
           path: app/build/outputs/apk/debug/*.apk
+      - name: Publicar el APK como descarga directa
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk uab-puente.apk
+          gh release create "apk-${GITHUB_RUN_NUMBER}" uab-puente.apk --title "UAB Puente (compilación ${GITHUB_RUN_NUMBER})" --notes "APK de prueba. Desinstala la versión anterior antes de instalar."

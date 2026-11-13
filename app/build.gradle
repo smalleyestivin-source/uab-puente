@@ -6,8 +6,8 @@ android {
         applicationId 'app.uab.puente2'
         minSdk 24
         targetSdk 34
-        versionCode 5
-        versionName '0.5.0'
+        versionCode 6
+        versionName '0.6.0'
     }
     // Si existe app/uab.keystore, todas las compilaciones se firman con la MISMA llave:
     // así Android actualiza la app encima de la anterior y conserva cookies y ajustes.

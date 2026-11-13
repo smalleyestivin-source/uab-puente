@@ -2,6 +2,8 @@ package app.uab.bridge;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.DownloadManager;
+import android.content.ContentValues;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
@@ -11,12 +13,18 @@ import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+import android.provider.MediaStore;
+import android.util.Base64;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
+import android.webkit.DownloadListener;
+import android.webkit.URLUtil;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
@@ -38,6 +46,9 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -61,7 +72,8 @@ public class MainActivity extends Activity {
             {"Qwen", "https://chat.qwen.ai/"},
             {"Kimi", "https://www.kimi.com/"},
             {"Z.ai (GLM)", "https://chat.z.ai/"},
-            {"Meta AI", "https://www.meta.ai/"}
+            {"Meta AI", "https://www.meta.ai/"},
+            {"Stitch (diseño)", "https://stitch.withgoogle.com/"}
     };
     static final String[] DEFAULT_AIS = {"Claude", "ChatGPT", "Grok", "DeepSeek", "Gemini"};
     static boolean okKey(String k) { return k != null && k.matches("(relay|on|auto|autoins|maxh|executed)(@[a-z0-9_-]{1,30})?"); }
@@ -205,6 +217,13 @@ public class MainActivity extends Activity {
         plus.setAllCaps(false);
         plus.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { addDialog(); } });
         bar.addView(plus, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        Button rel = new Button(this);
+        rel.setText("Recargar");
+        rel.setAllCaps(false);
+        rel.setOnClickListener(new View.OnClickListener() { public void onClick(View v) {
+            if (cur != null && cur.web != null) { cur.web.reload(); Toast.makeText(MainActivity.this, "Recargando " + cur.name, Toast.LENGTH_SHORT).show(); }
+        } });
+        bar.addView(rel, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         Button ins = new Button(this);
         ins.setText("Instrucciones");
         ins.setAllCaps(false);
@@ -409,6 +428,9 @@ public class MainActivity extends Activity {
                 }
             }
         });
+        web.setDownloadListener(new DownloadListener() {
+            @Override public void onDownloadStart(String url, String ua, String cd, String mime, long len) { startDownload(t, url, cd, mime); }
+        });
         web.setWebChromeClient(new WebChromeClient() {
             @Override public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams p) {
                 if (fileCb != null) fileCb.onReceiveValue(null);
@@ -435,6 +457,63 @@ public class MainActivity extends Activity {
     }
 
     /** Solo la pantalla de inicio y las IA de la lista pueden usar el puente nativo. */
+    static String safeName(String n) {
+        if (n == null || n.trim().length() == 0) n = "archivo";
+        n = n.replaceAll("[^A-Za-z0-9._ -]", "_");
+        return n.length() > 80 ? n.substring(n.length() - 80) : n;
+    }
+
+    /** Guarda bytes en Descargas/UAB (Android 10+) o en la carpeta de descargas de la app. Devuelve donde quedó. */
+    String saveBytes(String name, String mime, byte[] data) throws Exception {
+        name = safeName(name);
+        if (Build.VERSION.SDK_INT >= 29) {
+            ContentValues cv = new ContentValues();
+            cv.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
+            cv.put(MediaStore.MediaColumns.MIME_TYPE, mime == null || mime.length() == 0 ? "application/octet-stream" : mime);
+            cv.put(MediaStore.MediaColumns.RELATIVE_PATH, "Download/UAB");
+            Uri uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv);
+            if (uri == null) throw new Exception("No se pudo crear el archivo");
+            OutputStream os = getContentResolver().openOutputStream(uri);
+            try { os.write(data); } finally { os.close(); }
+            return "Descargas/UAB/" + name;
+        }
+        File dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+        if (dir == null) throw new Exception("Sin almacenamiento");
+        dir.mkdirs();
+        File f = new File(dir, name);
+        FileOutputStream os = new FileOutputStream(f);
+        try { os.write(data); } finally { os.close(); }
+        return f.getAbsolutePath();
+    }
+
+    void toast(final String m) {
+        runOnUiThread(new Runnable() { public void run() { Toast.makeText(MainActivity.this, m, Toast.LENGTH_LONG).show(); } });
+    }
+
+    void startDownload(Tab t, String url, String cd, String mime) {
+        try {
+            String name = URLUtil.guessFileName(url, cd, mime);
+            if (url.startsWith("blob:") || url.startsWith("data:")) {
+                if (!trusted(t) || t.web == null) { toast("No puedo guardar este archivo desde aquí."); return; }
+                String js = "(function(){var u=" + JSONObject.quote(url) + ";fetch(u).then(function(r){return r.blob()}).then(function(b){var f=new FileReader();f.onload=function(){"
+                        + "UABNative.saveBase64(" + JSONObject.quote(name) + "," + JSONObject.quote(mime == null ? "" : mime) + ",String(f.result).split(',')[1])};f.readAsDataURL(b)}).catch(function(e){})})()";
+                t.web.evaluateJavascript(js, null);
+                return;
+            }
+            if (!url.startsWith("https://")) { toast("Solo se permiten descargas seguras (https)."); return; }
+            DownloadManager.Request rq = new DownloadManager.Request(Uri.parse(url));
+            String ck = CookieManager.getInstance().getCookie(url);
+            if (ck != null) rq.addRequestHeader("Cookie", ck);
+            rq.setTitle(name);
+            rq.setMimeType(mime);
+            rq.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+            if (Build.VERSION.SDK_INT >= 29) rq.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "UAB/" + safeName(name));
+            else rq.setDestinationInExternalFilesDir(this, Environment.DIRECTORY_DOWNLOADS, safeName(name));
+            ((DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE)).enqueue(rq);
+            toast("Descargando " + name + "…");
+        } catch (Exception e) { toast("No se pudo descargar: " + e.getMessage()); }
+    }
+
     boolean trusted(Tab t) {
         String u = t.url;
         if (u == null) return false;
@@ -486,6 +565,14 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void set(String k, String v) {
             if (!trusted(tab) || !okKey(k) || v == null || v.length() > 60000) return;
             prefs.edit().putString(k, v).apply();
+        }
+        @JavascriptInterface public void saveFile(String name, String text) {
+            if (!trusted(tab) || text == null || text.length() > 8000000) return;
+            try { toast("Guardado en " + saveBytes(name, "text/plain", text.getBytes("UTF-8"))); } catch (Exception e) { toast("No se pudo guardar: " + e.getMessage()); }
+        }
+        @JavascriptInterface public void saveBase64(String name, String mime, String b64) {
+            if (!trusted(tab) || b64 == null || b64.length() > 40000000) return;
+            try { toast("Guardado en " + saveBytes(name, mime, Base64.decode(b64, Base64.DEFAULT))); } catch (Exception e) { toast("No se pudo guardar: " + e.getMessage()); }
         }
         @JavascriptInterface public void copy(final String t) {
             if (!trusted(tab)) return;

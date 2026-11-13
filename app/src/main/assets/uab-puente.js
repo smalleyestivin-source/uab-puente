@@ -146,7 +146,7 @@
   let hasRole = false;
   async function roleText() {
     hasRole = false;
-    try { const rl = parseRelay(cfg().relay), r = await relayJson(`${rl.base}/c/${rl.token}/meta.role`); if (r.ok && r.data && r.data.texto) { hasRole = true; return '\nROL ESPECIAL:\n' + r.data.texto; } } catch {}
+    try { const rl = parseRelay(cfg().relay), r = await relayJson(`${rl.base}/c/${rl.token}/meta.role`); if (r.ok && r.data && r.data.texto) { hasRole = !!r.data.supervisor; return '\nROL ESPECIAL:\n' + r.data.texto; } } catch {}
     return '';
   }
 

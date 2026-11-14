@@ -76,7 +76,7 @@ public class MainActivity extends Activity {
             {"Stitch (diseño)", "https://stitch.withgoogle.com/"}
     };
     static final String[] DEFAULT_AIS = {"Claude", "ChatGPT", "Grok", "DeepSeek", "Gemini"};
-    static boolean okKey(String k) { return k != null && k.matches("(relay|on|auto|autoins|maxh|executed)(@[a-z0-9_-]{1,30})?"); }
+    static boolean okKey(String k) { return k != null && k.matches("(relay|on|auto|autoins|maxh|executed|armed)(@[a-z0-9_-]{1,30})?"); }
     static final Set<String> KEYS = new HashSet<String>(java.util.Arrays.asList("relay", "on", "auto", "executed"));
     static final int FILE_REQ = 7;
 
@@ -629,7 +629,7 @@ public class MainActivity extends Activity {
         }
         @JavascriptInterface public void http(final int id, final String url) {
             final String pre = relayPrefix();
-            final boolean allowed = trusted(tab) && pre != null && (url.startsWith(pre + "/c/") || url.startsWith(pre + "/r/"));
+            final boolean allowed = trusted(tab) && pre != null && (url.startsWith(pre + "/c/") || url.startsWith(pre + "/r/") || url.startsWith(pre + "/w/"));
             new Thread(new Runnable() { public void run() {
                 boolean ok = false; String text = "";
                 if (allowed) {

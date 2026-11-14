@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UAB Puente (Universal AI Bridge)
 // @namespace    uab
-// @version      0.1.0
+// @version      0.2.0
 // @description  Lee los bloques ```uab que escribe tu IA en su chat, los ejecuta en tu relay y devuelve el resultado al chat.
 // @match        https://grok.com/*
 // @match        https://chat.deepseek.com/*
@@ -79,9 +79,10 @@
     for (const s of sel) for (const b of document.querySelectorAll(s)) if (!inUi(b) && b.getClientRects().length && !b.disabled && b.getAttribute('aria-disabled') !== 'true') return b;
     return null;
   }
-  async function deliver(text, auto) {
+  async function deliver(text, auto, guard) {
     const el = composer(); if (!el) return false;
     fill(el, text); await sleep(500);
+    if (guard && !textOf(el).includes('[SISTEMA UAB]')) return false;   // el usuario escribió justo ahora: no se envía su texto por error
     if (!auto) return true;
     const b = sendBtn();
     if (b) b.click();
@@ -110,7 +111,7 @@
     if (!rl) return say('⚠ Falta el enlace del relay.');
     sentTimes = sentTimes.filter(t => Date.now() - t < 3600e3);
     if (sentTimes.length >= c.maxh) { store.set('on', false); report('paused'); return say('⛔ Pausado: ' + c.maxh + ' respuestas automáticas en una hora. Actívalo de nuevo cuando quieras (o sube el máximo aquí).'); }
-    say('▶ Ejecutando: ' + calls.map(x => x.tool).join(', ')); report('working');
+    armChat(); say('▶ Ejecutando: ' + calls.map(x => x.tool).join(', ')); report('working');
     const out = [];
     for (const x of calls) { let r; try { r = await runCall(x, rl); } catch (e) { r = {ok: false, error: 'No se pudo llamar al relay (' + e.message + ').'}; } out.push({tool: x.tool, result: r}); }
     let body = JSON.stringify(out); if (body.length > 8000) body = body.slice(0, 8000) + '…[recortado]';
@@ -118,6 +119,35 @@
     sentTimes.push(Date.now());
     say(ok ? '✓ Resultado enviado al chat.' : '✋ Resultado puesto en la caja de texto: pulsa enviar tú.'); report('idle');
   }
+  /* ---------- despertador: si hay trabajo para esta IA y el usuario dio permiso en su panel, le escribe un mensaje ---------- */
+  const armChat = () => store.set(kk('armed'), {p: location.pathname, t: Date.now()});
+  function generating() {
+    const sel = ['button[aria-label*="stop" i]', 'button[aria-label*="detener" i]', 'button[aria-label*="parar" i]', '[data-testid*="stop" i]', 'button[aria-label*="cancel" i]'];
+    for (const q of sel) for (const b of document.querySelectorAll(q)) if (!inUi(b) && b.getClientRects().length) return true;
+    return false;
+  }
+  let wakeBusy = false, wakeLast = 0;
+  async function wakeTick() {
+    if (wakeBusy || busy || insBusy || !baselineDone) return;
+    const c = cfg(); if (!c.on || !c.auto) return;
+    const rl = parseRelay(c.relay); if (!rl) return;
+    const a = store.get(kk('armed'), null);
+    if (!a || a.p !== location.pathname || Date.now() - a.t > 72 * 3600e3) return;       // solo en el chat donde ya le diste las instrucciones
+    if (Date.now() - wakeLast < 40000) return;
+    wakeBusy = true; wakeLast = Date.now();
+    try {
+      const el = composer(); if (!el || textOf(el).trim() || generating()) return;        // el usuario está escribiendo o la IA está respondiendo
+      const who = /^[a-z0-9_-]{1,30}$/i.test(window.__uabWho || '') ? '?who=' + encodeURIComponent(window.__uabWho) : '';
+      const r = await relayJson(`${rl.base}/w/${rl.token}${who}`);
+      if (!r || !r.wake || typeof r.texto !== 'string') return;
+      const el2 = composer(); if (!el2 || textOf(el2).trim() || generating() || busy) return;   // el usuario escribió mientras consultaba: no se le pisa
+      sentTimes = sentTimes.filter(t => Date.now() - t < 3600e3);
+      if (sentTimes.length >= c.maxh) return;
+      if (await deliver(r.texto.slice(0, 900), true, true)) { sentTimes.push(Date.now()); say('⏰ Desperté a la IA: ' + String(r.motivo || '').slice(0, 120)); report('working'); }
+      else say('✋ Aviso de despertar puesto en la caja: pulsa enviar tú.');
+    } catch (e) { /* sin red: se reintenta en el siguiente ciclo */ } finally { wakeBusy = false; }
+  }
+
   function scan() {
     const c = cfg(); if (!c.on) return;
     for (const el of document.querySelectorAll('pre, code')) {
@@ -206,10 +236,10 @@
       sentTimes = sentTimes.filter(t => Date.now() - t < 3600e3);
       if (sentTimes.length >= c.maxh) return;
       const t = await buildInstructions();
-      if (await deliver(t + (hasRole ? '\nEmpieza ya tu trabajo: llama super.watch.' : '\nConfirma solo con la palabra: Listo.'), true)) { sentTimes.push(Date.now()); say('✓ Instrucciones enviadas solas.'); }
+      if (await deliver(t + (hasRole ? '\nEmpieza ya tu trabajo: llama super.watch.' : '\nConfirma solo con la palabra: Listo.'), true)) { sentTimes.push(Date.now()); armChat(); say('✓ Instrucciones enviadas solas.'); }
       else say('✋ Instrucciones en la caja: pulsa enviar tú.');
     } catch (e) { say('⚠ ' + e.message); } finally { insBusy = false; }
   }
-  const start = () => { initUi(); report(cfg().on ? 'idle' : 'paused'); setTimeout(() => { baselineDone = true; }, 4000); setInterval(scan, 1500); setInterval(autoInstr, 1500); };
+  const start = () => { initUi(); report(cfg().on ? 'idle' : 'paused'); setTimeout(() => { baselineDone = true; }, 4000); setInterval(scan, 1500); setInterval(autoInstr, 1500); setInterval(wakeTick, 20000); };
   document.body ? start() : addEventListener('DOMContentLoaded', start);
 })();

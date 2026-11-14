@@ -1,18 +1,21 @@
 <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>UAB</title><style>
-body{margin:0;background:#0d0f15;color:#e8ecf5;font:15px system-ui,sans-serif;padding:18px;max-width:640px;margin:auto}
-h1{font-size:22px;margin:6px 0}p{color:#9aa5bd;line-height:1.5}
-input{width:100%;box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid #2b3142;background:#14171f;color:inherit;font:inherit}
+:root{--bg:#0a0e1a;--p:#141c33;--p2:#1b2644;--l:#ffffff1a;--t:#eef2ff;--m:#9aa8c8;--b:#7a93ff;--b2:#9a7bff}
+@media (prefers-color-scheme:light){:root{--bg:#f1f4fb;--p:#fff;--p2:#eef2fb;--l:#12204a1c;--t:#141b34;--m:#58658a;--b:#4a63e8;--b2:#7a55e6}}
+*{box-sizing:border-box}
+body{margin:0 auto;background:radial-gradient(900px 420px at 10% -10%,#2a3a7a44,transparent 60%),var(--bg);color:var(--t);font:15px/1.5 system-ui,sans-serif;padding:18px;max-width:640px;min-height:100vh}
+h1{font-size:22px;margin:6px 0}p{color:var(--m);line-height:1.5}
+input{width:100%;padding:13px;border-radius:14px;border:1px solid var(--l);background:var(--p);color:inherit;font:inherit}
 .g{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}
-a{display:block;text-align:center;padding:14px;border-radius:12px;background:#4f6bff;color:#fff;text-decoration:none;font-weight:600}
-small{color:#7c879f;display:block;margin-top:14px;line-height:1.5}b.ok{color:#4ade80}b.no{color:#fbbf24}
+a{display:block;text-align:center;padding:16px 10px;border-radius:16px;background:linear-gradient(110deg,var(--b),var(--b2));color:#fff;text-decoration:none;font-weight:700;box-shadow:0 8px 22px #6a7dff33}
+small{color:var(--m);display:block;margin-top:14px;line-height:1.5}b.ok{color:#4ade80}b.no{color:#fbbf24}
 </style></head><body>
 <h1>Universal AI Bridge</h1>
 <p>1. Pega el enlace de tu relay (se guarda en este dispositivo).<br>2. Abre tu IA e inicia sesión.<br>3. Toca el botón <b>UAB</b> de abajo a la izquierda y luego «Insertar instrucciones». Envíalas y pídele cosas.</p>
 <input id="rl" placeholder="https://tu-relay.workers.dev/c/…" autocomplete="off">
 <p id="st"></p>
 <div class="g" id="tabs"></div>
-<a href="#" id="add" style="background:#2b3142;margin-bottom:10px">+ Añadir otra IA o cuenta</a>
+<a href="#" id="add" style="background:var(--p2);color:var(--t);box-shadow:none;border:1px solid var(--l);margin-bottom:10px">+ Añadir otra IA o cuenta</a>
 <small>Cada IA o cuenta tiene su pestaña; mantén pulsada una pestaña para cerrarla. Con «+ IA» añades otra cuenta de la misma IA. Las IA siguen trabajando aunque cambies de pestaña: la barra de arriba muestra su estado (verde = trabajando, ámbar = espera tu aprobación, rojo = en pausa). Mantén la app abierta.<br><br>Si una IA no te deja iniciar sesión con Google dentro de la app, usa correo y contraseña. Las acciones delicadas se aprueban en el panel de tu relay (/admin).</small>
 <script>
 var IN_APP=!!window.UABNative;
@@ -27,7 +30,7 @@ rl.addEventListener('input',function(){if(chk())N.set('relay',JSON.stringify(rl.
 var tb=document.getElementById('tabs'),COL={working:'#4ade80',approval:'#fbbf24',paused:'#f87171',error:'#f87171'};
 function render(){var l=[];try{l=JSON.parse(N.tabs())}catch(e){}
  tb.innerHTML='';l.forEach(function(t){var a=document.createElement('a');a.href='#';a.textContent=(COL[t.state]?'● ':'')+t.name;
-  if(t.name==='Proyecto')a.style.cssText='grid-column:1/3;background:#2f9e6f';
+  if(t.name==='Proyecto')a.style.cssText='grid-column:1/3;background:linear-gradient(110deg,#2f9e6f,#3bbf8a)';
   if(COL[t.state])a.style.borderLeft='6px solid '+COL[t.state];
   a.onclick=function(){N.open(t.name);return false};tb.appendChild(a)})}
 document.getElementById('add').onclick=function(){N.addDialog();return false};

@@ -610,6 +610,16 @@ public class MainActivity extends Activity {
                 return a.toString();
             } catch (Exception e) { return "[]"; }
         }
+        /** Abre la vista previa del proyecto en el navegador del teléfono (solo enlaces /v/ de tu propio relé). */
+        @JavascriptInterface public void openExternal(final String url) {
+            final String pre = relayPrefix();
+            boolean panel = pre != null && tab.ai == null && tab != tabs.get(0) && tab.url != null && tab.url.startsWith(pre + "/");
+            if (!panel || url == null || !url.startsWith(pre + "/v/")) return;
+            runOnUiThread(new Runnable() { public void run() {
+                try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
+                catch (Exception e) { toast("No pude abrir el navegador."); }
+            } });
+        }
         @JavascriptInterface public void http(final int id, final String url) {
             final String pre = relayPrefix();
             final boolean allowed = trusted(tab) && pre != null && (url.startsWith(pre + "/c/") || url.startsWith(pre + "/r/"));

@@ -522,6 +522,12 @@ public class MainActivity extends Activity {
         try { return hosts.contains(Uri.parse(u).getHost()); } catch (Exception e) { return false; }
     }
 
+    /** La pestaña "Proyecto" (panel de tu propio relé) también puede guardar archivos y abrir el navegador. */
+    boolean panelTab(Tab t) {
+        String pre = relayPrefix();
+        return pre != null && t.ai == null && t != tabs.get(0) && t.url != null && t.url.startsWith(pre + "/");
+    }
+
     String relayPrefix() {
         try {
             String raw = prefs.getString("relay", null);
@@ -566,16 +572,18 @@ public class MainActivity extends Activity {
             if (!trusted(tab) || !okKey(k) || v == null || v.length() > 60000) return;
             prefs.edit().putString(k, v).apply();
         }
+        /** El panel pregunta si esta versión sabe guardar archivos desde la pestaña Proyecto. */
+        @JavascriptInterface public boolean panelOk() { return panelTab(tab); }
         @JavascriptInterface public void saveFile(String name, String text) {
-            if (!trusted(tab) || text == null || text.length() > 8000000) return;
+            if (!(trusted(tab) || panelTab(tab)) || text == null || text.length() > 8000000) return;
             try { toast("Guardado en " + saveBytes(name, "text/plain", text.getBytes("UTF-8"))); } catch (Exception e) { toast("No se pudo guardar: " + e.getMessage()); }
         }
         @JavascriptInterface public void saveBase64(String name, String mime, String b64) {
-            if (!trusted(tab) || b64 == null || b64.length() > 40000000) return;
+            if (!(trusted(tab) || panelTab(tab)) || b64 == null || b64.length() > 40000000) return;
             try { toast("Guardado en " + saveBytes(name, mime, Base64.decode(b64, Base64.DEFAULT))); } catch (Exception e) { toast("No se pudo guardar: " + e.getMessage()); }
         }
         @JavascriptInterface public void copy(final String t) {
-            if (!trusted(tab)) return;
+            if (!(trusted(tab) || panelTab(tab))) return;
             runOnUiThread(new Runnable() { public void run() {
                 ((ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("UAB", t));
             } });
@@ -613,8 +621,7 @@ public class MainActivity extends Activity {
         /** Abre la vista previa del proyecto en el navegador del teléfono (solo enlaces /v/ de tu propio relé). */
         @JavascriptInterface public void openExternal(final String url) {
             final String pre = relayPrefix();
-            boolean panel = pre != null && tab.ai == null && tab != tabs.get(0) && tab.url != null && tab.url.startsWith(pre + "/");
-            if (!panel || url == null || !url.startsWith(pre + "/v/")) return;
+            if (!panelTab(tab) || url == null || !url.startsWith(pre + "/v/")) return;
             runOnUiThread(new Runnable() { public void run() {
                 try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
                 catch (Exception e) { toast("No pude abrir el navegador."); }

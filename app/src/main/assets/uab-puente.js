@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UAB Puente (Universal AI Bridge)
 // @namespace    uab
-// @version      0.2.0
+// @version      0.3.0
 // @description  Lee los bloques ```uab que escribe tu IA en su chat, los ejecuta en tu relay y devuelve el resultado al chat.
 // @match        https://grok.com/*
 // @match        https://chat.deepseek.com/*
@@ -131,14 +131,18 @@
     if (wakeBusy || busy || insBusy || !baselineDone) return;
     const c = cfg(); if (!c.on || !c.auto) return;
     const rl = parseRelay(c.relay); if (!rl) return;
-    const a = store.get(kk('armed'), null);
-    if (!a || a.p !== location.pathname || Date.now() - a.t > 72 * 3600e3) return;       // solo en el chat donde ya le diste las instrucciones
+    // Solo en un chat donde la IA ya recibió las instrucciones (así sabe usar las herramientas): lo reconoce por las marcas que deja el puente.
+    let a = store.get(kk('armed'), null);
+    if (!a || a.p !== location.pathname || Date.now() - a.t > 72 * 3600e3) {
+      let txt = ''; try { txt = document.body ? document.body.innerText : ''; } catch (e) { }
+      if (/\[SISTEMA UAB\]|UAB\/1 |Tienes herramientas mediante un puente/.test(txt)) { armChat(); a = {p: location.pathname, t: Date.now()}; } else return;
+    }
     if (Date.now() - wakeLast < 40000) return;
     wakeBusy = true; wakeLast = Date.now();
     try {
       const el = composer(); if (!el || textOf(el).trim() || generating()) return;        // el usuario está escribiendo o la IA está respondiendo
       const who = /^[a-z0-9_-]{1,30}$/i.test(window.__uabWho || '') ? '?who=' + encodeURIComponent(window.__uabWho) : '';
-      const r = await relayJson(`${rl.base}/w/${rl.token}${who}`);
+      const r = await relayJson(`${rl.base}/w/${rl.token}${who || '?'}${who ? '&' : ''}v=0.3`);
       if (!r || !r.wake || typeof r.texto !== 'string') return;
       const el2 = composer(); if (!el2 || textOf(el2).trim() || generating() || busy) return;   // el usuario escribió mientras consultaba: no se le pisa
       sentTimes = sentTimes.filter(t => Date.now() - t < 3600e3);

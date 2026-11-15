@@ -110,6 +110,10 @@ public class MainActivity extends Activity {
         }
         // Mantiene la pantalla encendida mientras la app está abierta: así las IA siguen trabajando.
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission("android.permission.POST_NOTIFICATIONS") != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            try { requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 11); } catch (Throwable ignored) { }
+        }
+        startKeepAlive();
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -130,6 +134,16 @@ public class MainActivity extends Activity {
         Tab first = byName(prefs.getString("lastTab", ""));
         select(first != null && first.ai != null ? first : tabs.get(0));
     }
+
+    /** Arranca (o renueva) el servicio que mantiene la app viva con la pantalla apagada. */
+    void startKeepAlive() {
+        try {
+            Intent i = new Intent(this, KeepAliveService.class);
+            if (Build.VERSION.SDK_INT >= 26) startForegroundService(i); else startService(i);
+        } catch (Throwable e) { toast("No pude activar el modo en segundo plano."); }
+    }
+
+    @Override protected void onResume() { super.onResume(); startKeepAlive(); }
 
     void cm2flush(Tab t) { if (t.cm != null) t.cm.flush(); else CookieManager.getInstance().flush(); }
 

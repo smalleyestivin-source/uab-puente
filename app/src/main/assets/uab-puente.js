@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UAB Puente (Universal AI Bridge)
 // @namespace    uab
-// @version      0.3.0
+// @version      0.4.0
 // @description  Lee los bloques ```uab que escribe tu IA en su chat, los ejecuta en tu relay y devuelve el resultado al chat.
 // @match        https://grok.com/*
 // @match        https://chat.deepseek.com/*
@@ -31,7 +31,7 @@
   });
   const WHO = () => /^[a-z0-9_-]{1,30}$/i.test(window.__uabWho || '') ? String(window.__uabWho).toLowerCase() : '';
   const kk = k => WHO() ? k + '@' + WHO() : k;          // ajustes propios de cada pestaña
-  const cfg = () => ({relay: store.get(kk('relay'), '') || store.get('relay', ''), on: store.get('on', true), auto: store.get('auto', true), autoins: store.get('autoins', true), maxh: Math.max(5, Math.min(300, Number(store.get(kk('maxh'), 25)) || 25))});
+  const cfg = () => ({relay: store.get(kk('relay'), '') || store.get('relay', ''), on: store.get('on', true), auto: store.get('auto', true), autoins: store.get('autoins', true), hide: store.get('hide', true), maxh: Math.max(5, Math.min(300, Number(store.get(kk('maxh'), 25)) || 25))});
   const parseRelay = s => { const m = String(s || '').trim().match(/^(https?:\/\/[^\s\/?#]+)\/c\/([0-9a-f]{32})/i); return m ? {base: m[1], token: m[2].toLowerCase()} : null; };
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const report = st => { try { window.UABNative && window.UABNative.status && window.UABNative.status(st); } catch (e) {} };
@@ -152,14 +152,39 @@
     } catch (e) { /* sin red: se reintenta en el siguiente ciclo */ } finally { wakeBusy = false; }
   }
 
+  /* ---------- ocultar en el chat los bloques de herramientas y los mensajes del puente (las IA los siguen viendo; tú los ves en el panel) ---------- */
+  const hiddenEls = new Set();
+  function hideUp(el, own, maxUp) {
+    let top = el, comp = null; try { comp = composer(); } catch (e) { }
+    for (let i = 0; i < maxUp; i++) {
+      const p = top.parentElement; if (!p || p === document.body || p === document.documentElement) break;
+      if ((p.textContent || '').length > own + 14 || (comp && p.contains(comp)) || p.querySelector('textarea, form, [contenteditable="true"]')) break;
+      top = p;
+    }
+    if (comp && top.contains(comp)) return;
+    top.style.setProperty('display', 'none', 'important'); top.setAttribute('data-uab-hid', '1'); hiddenEls.add(top);
+  }
+  function unhideAll() { for (const e of hiddenEls) { try { e.style.removeProperty('display'); e.removeAttribute('data-uab-hid'); } catch (x) { } } hiddenEls.clear(); }
+  function hideMessages() {
+    if (!cfg().hide) { if (hiddenEls.size) unhideAll(); return; }
+    let r; try { r = document.evaluate("//*[not(@data-uab-hid)][text()[starts-with(normalize-space(.),'[SISTEMA UAB]') or starts-with(normalize-space(.),'Tienes herramientas mediante un puente')]]", document.body, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null); } catch (e) { return; }
+    for (let i = 0; i < r.snapshotLength && i < 60; i++) { const el = r.snapshotItem(i); if (inUi(el) || el.closest('[data-uab-hid]') || /^(TEXTAREA|INPUT)$/.test(el.tagName) || el.isContentEditable) continue; hideUp(el, (el.textContent || '').length, 3); }
+  }
+  let dirty = true;
+  try { new MutationObserver(() => { dirty = true; }).observe(document.documentElement, {childList: true, subtree: true, characterData: true}); } catch (e) { }
+  let slow = 0;
+
   function scan() {
     const c = cfg(); if (!c.on) return;
+    if (!dirty && ++slow < 5) return; slow = 0; dirty = false;
+    hideMessages();
     for (const el of document.querySelectorAll('pre, code')) {
       if (inUi(el) || done.has(el) || (el.tagName === 'CODE' && el.closest('pre'))) continue;
       const t = el.textContent || ''; if (!t.includes('"tool"')) continue;
-      const prev = last.get(el); last.set(el, t); if (prev !== t) continue;   // aún cambia
+      const prev = last.get(el); last.set(el, t); if (prev !== t) { dirty = true; continue; }   // aún cambia: se vuelve a mirar en el siguiente ciclo
       const calls = parseCalls(t); if (!calls) continue;
       done.add(el);
+      if (c.hide) hideUp(el.tagName === 'CODE' && !el.closest('pre') ? el : (el.closest('pre') || el), t.length, 3);
       const k = keyOf(calls);
       if (!baselineDone || ignore.has(k) || prior.has(k) || busy) continue;
       store.set('executed', [...store.get('executed', []), k].slice(-200));
@@ -202,6 +227,7 @@
    <label><input type="checkbox" id="on"> Activo</label>
    <label><input type="checkbox" id="auto"> Enviar resultados solo</label>
    <label><input type="checkbox" id="autoins"> Enviar instrucciones solo en chat nuevo</label>
+   <label><input type="checkbox" id="hide"> Ocultar en el chat los mensajes de herramientas (se ven en el panel)</label>
    <label>Máx. envíos solos por hora <input type="text" id="maxh" style="width:60px"></label>
    <button class="b" id="ins">Insertar instrucciones</button><button class="b" id="tst">Probar</button>
    <div id="log"></div></div><button id="fab">UAB</button>`;
@@ -209,7 +235,7 @@
   function say(t) { const l = $('#log'); l.textContent += (l.textContent ? '\n' : '') + t; l.scrollTop = l.scrollHeight; }
   function initUi() {
     document.body.appendChild(host);
-    const c = cfg(); $('#on').checked = c.on; $('#auto').checked = c.auto; $('#autoins').checked = c.autoins; $('#maxh').value = c.maxh; $('#rl').value = store.get(kk('relay'), ''); $('#rl').placeholder = 'Enlace de esta pestaña (vacío = el de Inicio)';
+    const c = cfg(); $('#on').checked = c.on; $('#auto').checked = c.auto; $('#autoins').checked = c.autoins; $('#hide').checked = c.hide; $('#maxh').value = c.maxh; $('#rl').value = store.get(kk('relay'), ''); $('#rl').placeholder = 'Enlace de esta pestaña (vacío = el de Inicio)';
     window.__uabInsert = () => $('#ins').click();
     $('#fab').onclick = () => { const b = $('#box'); b.style.display = b.style.display === 'block' ? 'none' : 'block'; };
     $('#rl').oninput = () => store.set(kk('relay'), $('#rl').value.trim());
@@ -217,6 +243,7 @@
     $('#on').onchange = () => { store.set('on', $('#on').checked); report($('#on').checked ? 'idle' : 'paused'); };
     $('#auto').onchange = () => store.set('auto', $('#auto').checked);
     $('#autoins').onchange = () => store.set('autoins', $('#autoins').checked);
+    $('#hide').onchange = () => { store.set('hide', $('#hide').checked); dirty = true; hideMessages(); };
     $('#tst').onclick = async () => { const rl = parseRelay(cfg().relay); if (!rl) return say('⚠ Enlace con formato incorrecto.'); try { const m = await relayJson(`${rl.base}/c/${rl.token}/meta.tools`); say(m.ok ? '✓ Relay correcto: ' + (m.data || []).length + ' herramientas.' : '⚠ ' + (m.error || 'error')); } catch { say('⚠ No se pudo conectar al relay.'); } };
     $('#ins').onclick = async () => {
       try { const t = await buildInstructions(); const el = composer();

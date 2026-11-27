@@ -73,7 +73,12 @@ public class MainActivity extends Activity {
             {"Kimi", "https://www.kimi.com/"},
             {"Z.ai (GLM)", "https://chat.z.ai/"},
             {"Meta AI", "https://www.meta.ai/"},
-            {"Stitch (diseño)", "https://stitch.withgoogle.com/"}
+            {"Stitch (diseño)", "https://stitch.withgoogle.com/"},
+            // Editores de video en la web: se abren en su pestaña, pero el puente NO se inyecta (no son chats).
+            {"VEED (video)", "https://www.veed.io/"},
+            {"CapCut (video)", "https://www.capcut.com/"},
+            {"Kapwing (video)", "https://www.kapwing.com/"},
+            {"Clipchamp (video)", "https://app.clipchamp.com/"}
     };
     static final String[] DEFAULT_AIS = {"Claude", "ChatGPT", "Grok", "DeepSeek", "Gemini"};
     static boolean okKey(String k) { return k != null && k.matches("(relay|on|auto|autoins|hide|maxh|executed|armed)(@[a-z0-9_-]{1,30})?"); }
@@ -106,6 +111,7 @@ public class MainActivity extends Activity {
         shim = asset("shim.js");
         puente = asset("uab-puente.js");
         for (String[] c : CATALOG) {
+            if (c[0].endsWith("(video)")) continue;
             try { hosts.add(Uri.parse(c[1]).getHost()); } catch (Exception ignored) { }
         }
         // Mantiene la pantalla encendida mientras la app está abierta: así las IA siguen trabajando.
